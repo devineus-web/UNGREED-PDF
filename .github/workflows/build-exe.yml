@@ -1,0 +1,69 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tesseract OCR
+        run: choco install tesseract -y
+
+      - name: Install Poppler
+        run: choco install poppler -y
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed --name UNGREED-PDF --add-data "converter.py;." app.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UNGREED-PDF-Windows
+          path: dist/UNGREED-PDF.exe
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: UNGREED-PDF-Windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: UNGREED-PDF v1.0.0
+          body: |
+            ## UNGREED-PDF v1.0.0
+
+            Convert any PDF (text-based or scanned/image) into an editable Word document.
+
+            ### Download
+            - **UNGREED-PDF.exe** — Standalone Windows application (no install needed)
+
+            ### Requirements
+            - [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) must be installed
+            - [Poppler](https://github.com/oschwartz10612/poppler-windows/releases) must be installed
+          files: UNGREED-PDF.exe
+          make_latest: true
