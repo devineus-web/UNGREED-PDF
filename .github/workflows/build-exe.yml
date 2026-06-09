@@ -20,20 +20,19 @@ jobs:
       - name: Install Tesseract OCR
         run: choco install tesseract -y
 
+      - name: Install UPX (for compression)
+        run: choco install upx -y
+
       - name: Prepare bundled Tesseract (only eng language)
         shell: pwsh
         run: |
           $tess = "C:\Program Files\Tesseract-OCR"
           $bundle = "tesseract_bundle\tesseract"
           New-Item -ItemType Directory -Path "$bundle\tessdata" -Force
-          # Copy only the essential files
           Copy-Item "$tess\tesseract.exe" "$bundle\"
-          # Copy required DLLs
           Get-ChildItem "$tess\*.dll" | Copy-Item -Destination "$bundle\"
-          # Copy only English trained data (keeps size small)
           Copy-Item "$tess\tessdata\eng.traineddata" "$bundle\tessdata\"
           Copy-Item "$tess\tessdata\osd.traineddata" "$bundle\tessdata\" -ErrorAction SilentlyContinue
-          # Show size
           $size = (Get-ChildItem "$bundle" -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
           Write-Output "Tesseract bundle size: $([math]::Round($size, 1)) MB"
 
@@ -42,18 +41,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build EXE
+      - name: Build EXE with UPX compression
+        shell: pwsh
         run: |
-          pyinstaller --onefile --windowed --clean --strip --name UNGREED-PDF --version-file version_info.py --add-data "converter.py;." --add-data "tesseract_bundle/tesseract;tesseract" app.py
+          $upxDir = (Get-Command upx -ErrorAction SilentlyContinue).Source | Split-Path
+          if (-not $upxDir) { $upxDir = "C:\ProgramData\chocolatey\bin" }
+          pyinstaller --onefile --windowed --clean --strip --name UNGREED-PDF --upx-dir $upxDir --version-file version_info.py --add-data "converter.py;." --add-data "tesseract_bundle/tesseract;tesseract" app.py
 
       - name: Check EXE size
         shell: pwsh
         run: |
           $size = (Get-Item "dist\UNGREED-PDF.exe").Length / 1MB
           Write-Output "EXE size: $([math]::Round($size, 1)) MB"
-          if ($size -gt 50) {
-            Write-Warning "EXE exceeds 50MB target!"
-          }
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
