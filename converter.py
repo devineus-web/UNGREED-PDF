@@ -3,7 +3,10 @@ UNGREED-PDF — Core Conversion Engine
 Converts any PDF (text-based or scanned/image) into an editable Word .docx.
 """
 
+from __future__ import annotations
+
 import os
+import io
 import fitz  # PyMuPDF
 import pytesseract
 from pdf2image import convert_from_path
@@ -11,9 +14,7 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image
-import io
-import re
-import tempfile
+from typing import Optional, Callable
 
 
 # Minimum character count to consider a page as having extractable text

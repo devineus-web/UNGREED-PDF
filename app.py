@@ -84,8 +84,12 @@ class UngreedPDFApp:
             insertbackground=TEXT_PRIMARY,
             relief="flat",
             bd=0,
+            state="readonly",
+            readonlybackground="#0d1b2a",
+            cursor="arrow",
         )
         self.input_entry.pack(side="left", fill="x", expand=True, ipady=6)
+        self.input_entry.bind("<Button-1>", lambda e: self._browse_pdf())
 
         browse_btn = tk.Button(
             input_inner,
@@ -121,8 +125,12 @@ class UngreedPDFApp:
             insertbackground=TEXT_PRIMARY,
             relief="flat",
             bd=0,
+            state="readonly",
+            readonlybackground="#0d1b2a",
+            cursor="arrow",
         )
         self.output_entry.pack(side="left", fill="x", expand=True, ipady=6)
+        self.output_entry.bind("<Button-1>", lambda e: self._browse_output())
 
         out_btn = tk.Button(
             output_inner,
@@ -208,20 +216,32 @@ class UngreedPDFApp:
 
     # ── Actions ──────────────────────────────
     def _browse_pdf(self):
+        initial = os.path.dirname(self.pdf_path.get()) if self.pdf_path.get() else os.path.expanduser("~")
         path = filedialog.askopenfilename(
             title="Select PDF",
+            initialdir=initial,
             filetypes=[("PDF Files", "*.pdf"), ("All Files", "*.*")],
         )
         if path:
             self.pdf_path.set(path)
-            # Auto-fill output if empty
-            if not self.output_path.get():
-                base = os.path.splitext(path)[0]
-                self.output_path.set(base + ".docx")
+            # Always auto-fill output: same folder, same name but .docx
+            base = os.path.splitext(path)[0]
+            self.output_path.set(base + ".docx")
 
     def _browse_output(self):
+        # Start in the same folder as the selected PDF, with a suggested name
+        current_pdf = self.pdf_path.get()
+        if current_pdf:
+            initial_dir = os.path.dirname(current_pdf)
+            initial_file = os.path.splitext(os.path.basename(current_pdf))[0] + ".docx"
+        else:
+            initial_dir = os.path.expanduser("~")
+            initial_file = "converted.docx"
+
         path = filedialog.asksaveasfilename(
             title="Save Word Document As",
+            initialdir=initial_dir,
+            initialfile=initial_file,
             defaultextension=".docx",
             filetypes=[("Word Documents", "*.docx"), ("All Files", "*.*")],
         )
