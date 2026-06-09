@@ -1,7 +1,7 @@
 """
 UNGREED-PDF — Core Conversion Engine
 Converts any PDF (text-based or scanned/image) into an editable Word .docx.
-No external dependencies beyond Tesseract OCR — uses PyMuPDF for rendering.
+Zero external dependencies — Tesseract is bundled, PyMuPDF handles rendering.
 """
 
 from __future__ import annotations
@@ -21,34 +21,40 @@ from typing import Optional, Callable
 # Minimum character count to consider a page as having extractable text
 MIN_TEXT_CHARS = 30
 
-# Common Tesseract install locations on Windows
-_TESSERACT_WIN_PATHS = [
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-    os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Tesseract-OCR", "tesseract.exe"),
-]
+
+def _get_bundle_dir() -> str:
+    """Return the directory where bundled files live (PyInstaller or script dir)."""
+    if getattr(sys, "frozen", False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
 
 
-def _auto_detect_tesseract():
-    """Find Tesseract on Windows even if it's not on PATH."""
-    if sys.platform != "win32":
+def _setup_tesseract():
+    """Find Tesseract: bundled first, then common Windows paths, then PATH."""
+    bundle = _get_bundle_dir()
+
+    # 1. Bundled Tesseract (inside PyInstaller .exe)
+    bundled_exe = os.path.join(bundle, "tesseract", "tesseract.exe")
+    if os.path.isfile(bundled_exe):
+        pytesseract.pytesseract.tesseract_cmd = bundled_exe
+        os.environ["TESSDATA_PREFIX"] = os.path.join(bundle, "tesseract", "tessdata")
         return
-    # Check if tesseract is already reachable
-    try:
-        pytesseract.get_tesseract_version()
-        return
-    except Exception:
-        pass
-    # Try common install locations
-    for path in _TESSERACT_WIN_PATHS:
-        if os.path.isfile(path):
-            pytesseract.pytesseract.tesseract_cmd = path
-            return
-    # Not found — will raise a clear error at conversion time
+
+    # 2. Common Windows install paths
+    if sys.platform == "win32":
+        for path in [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+        ]:
+            if os.path.isfile(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                return
+
+    # 3. Fall back to system PATH (Linux/macOS or user-installed)
 
 
-_auto_detect_tesseract()
+_setup_tesseract()
 
 
 def _is_text_page(page: fitz.Page) -> bool:

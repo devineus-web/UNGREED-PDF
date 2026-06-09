@@ -20,6 +20,23 @@ jobs:
       - name: Install Tesseract OCR
         run: choco install tesseract -y
 
+      - name: Prepare bundled Tesseract (only eng language)
+        shell: pwsh
+        run: |
+          $tess = "C:\Program Files\Tesseract-OCR"
+          $bundle = "tesseract_bundle\tesseract"
+          New-Item -ItemType Directory -Path "$bundle\tessdata" -Force
+          # Copy only the essential files
+          Copy-Item "$tess\tesseract.exe" "$bundle\"
+          # Copy required DLLs
+          Get-ChildItem "$tess\*.dll" | Copy-Item -Destination "$bundle\"
+          # Copy only English trained data (keeps size small)
+          Copy-Item "$tess\tessdata\eng.traineddata" "$bundle\tessdata\"
+          Copy-Item "$tess\tessdata\osd.traineddata" "$bundle\tessdata\" -ErrorAction SilentlyContinue
+          # Show size
+          $size = (Get-ChildItem "$bundle" -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+          Write-Output "Tesseract bundle size: $([math]::Round($size, 1)) MB"
+
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
@@ -27,7 +44,16 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name UNGREED-PDF --add-data "converter.py;." app.py
+          pyinstaller --onefile --windowed --clean --strip --name UNGREED-PDF --version-file version_info.py --add-data "converter.py;." --add-data "tesseract_bundle/tesseract;tesseract" app.py
+
+      - name: Check EXE size
+        shell: pwsh
+        run: |
+          $size = (Get-Item "dist\UNGREED-PDF.exe").Length / 1MB
+          Write-Output "EXE size: $([math]::Round($size, 1)) MB"
+          if ($size -gt 50) {
+            Write-Warning "EXE exceeds 50MB target!"
+          }
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
@@ -65,10 +91,8 @@ jobs:
             ### Download
             - **UNGREED-PDF.exe** — Standalone Windows application
 
-            ### Setup (one-time)
-            1. Install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) — just run the installer, keep default path
-            2. Download and run UNGREED-PDF.exe — that's it!
-
-            No Poppler needed. No PATH configuration needed. Tesseract is auto-detected.
+            ### Usage
+            Just download, double-click, and convert. No other software needed.
+            Works out of the box on Windows 10/11.
           files: UNGREED-PDF.exe
           make_latest: true
