@@ -14,64 +14,52 @@ UNGREED-PDF automatically detects whether each page contains extractable text or
 - **Embedded images** → preserved in the Word output
 - **Simple GUI** with file picker, progress bar, and one-click conversion
 - **CLI mode** for batch/scripting use
+- **No Poppler required** — uses PyMuPDF for native PDF rendering
+- **Auto-detects Tesseract** on Windows (no PATH setup needed)
 
 ## Requirements
 
-- Python 3.10+
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) installed and on PATH
-- [Poppler](https://poppler.freedesktop.org/) (`poppler-utils` / `pdf2image` dependency)
+- **Windows:** Just install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) — run the installer, keep default path. That's it.
+- **macOS:** `brew install tesseract`
+- **Linux:** `sudo apt-get install tesseract-ocr`
 
-### Install on Ubuntu/Debian
-```bash
-sudo apt-get install tesseract-ocr poppler-utils
-```
+## Quick Start (Windows)
 
-### Install on Windows
-- Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
-- Poppler: https://github.com/oschwartz10612/poppler-windows/releases
+1. Download `UNGREED-PDF.exe` from the [Releases page](https://github.com/devineus-web/UNGREED-PDF/releases)
+2. Install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) (just run the installer)
+3. Double-click `UNGREED-PDF.exe`
+4. Click **Browse** to select your PDF → Click **CONVERT TO WORD**
 
-### Install on macOS
-```bash
-brew install tesseract poppler
-```
-
-## Setup
+## Running from Source
 
 ```bash
-git clone https://github.com/DEVINEUS/UNGREED-PDF.git
+git clone https://github.com/devineus-web/UNGREED-PDF.git
 cd UNGREED-PDF
 pip install -r requirements.txt
-```
-
-## Usage
-
-### GUI (Desktop App)
-```bash
 python app.py
 ```
-A window opens — browse for your PDF, pick an output location, and click **CONVERT TO WORD**.
 
-### CLI
+## CLI
+
 ```bash
 python cli.py input.pdf                    # output: input.docx
 python cli.py input.pdf output.docx        # explicit output path
 python cli.py input.pdf --lang eng+fra     # multi-language OCR
 ```
 
-## Building a Standalone .exe (Windows)
+## Building the .exe
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --windowed --name UNGREED-PDF app.py
+pyinstaller --onefile --windowed --name UNGREED-PDF --add-data "converter.py;." app.py
 ```
-The executable will be in `dist/UNGREED-PDF.exe`.
 
 ## How It Works
 
 1. Opens the PDF with PyMuPDF
 2. For each page:
    - If extractable text is found → adds text directly to the Word doc
-   - If the page is scanned/image → renders at 300 DPI, runs Tesseract OCR, adds extracted text
+   - If the page is scanned/image → renders at 300 DPI with PyMuPDF, runs Tesseract OCR, adds extracted text
    - Embedded images are preserved in the output
 3. Saves the result as `.docx`
 

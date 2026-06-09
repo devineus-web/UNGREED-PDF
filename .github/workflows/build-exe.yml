@@ -20,9 +20,6 @@ jobs:
       - name: Install Tesseract OCR
         run: choco install tesseract -y
 
-      - name: Install Poppler
-        run: choco install poppler -y
-
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
@@ -49,6 +46,12 @@ jobs:
         with:
           name: UNGREED-PDF-Windows
 
+      - name: Delete old release
+        run: gh release delete v1.0.0 --yes --cleanup-tag || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -60,10 +63,12 @@ jobs:
             Convert any PDF (text-based or scanned/image) into an editable Word document.
 
             ### Download
-            - **UNGREED-PDF.exe** — Standalone Windows application (no install needed)
+            - **UNGREED-PDF.exe** — Standalone Windows application
 
-            ### Requirements
-            - [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) must be installed
-            - [Poppler](https://github.com/oschwartz10612/poppler-windows/releases) must be installed
+            ### Setup (one-time)
+            1. Install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) — just run the installer, keep default path
+            2. Download and run UNGREED-PDF.exe — that's it!
+
+            No Poppler needed. No PATH configuration needed. Tesseract is auto-detected.
           files: UNGREED-PDF.exe
           make_latest: true

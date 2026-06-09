@@ -1,17 +1,18 @@
 """
 UNGREED-PDF — Core Conversion Engine
 Converts any PDF (text-based or scanned/image) into an editable Word .docx.
+No external dependencies beyond Tesseract OCR — uses PyMuPDF for rendering.
 """
 
 from __future__ import annotations
 
 import os
 import io
+import sys
 import fitz  # PyMuPDF
 import pytesseract
-from pdf2image import convert_from_path
 from docx import Document
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image
 from typing import Optional, Callable
@@ -20,11 +21,39 @@ from typing import Optional, Callable
 # Minimum character count to consider a page as having extractable text
 MIN_TEXT_CHARS = 30
 
+# Common Tesseract install locations on Windows
+_TESSERACT_WIN_PATHS = [
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+    os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Tesseract-OCR", "tesseract.exe"),
+]
+
+
+def _auto_detect_tesseract():
+    """Find Tesseract on Windows even if it's not on PATH."""
+    if sys.platform != "win32":
+        return
+    # Check if tesseract is already reachable
+    try:
+        pytesseract.get_tesseract_version()
+        return
+    except Exception:
+        pass
+    # Try common install locations
+    for path in _TESSERACT_WIN_PATHS:
+        if os.path.isfile(path):
+            pytesseract.pytesseract.tesseract_cmd = path
+            return
+    # Not found — will raise a clear error at conversion time
+
+
+_auto_detect_tesseract()
+
 
 def _is_text_page(page: fitz.Page) -> bool:
     """Check if a page has enough extractable text to skip OCR."""
     text = page.get_text("text").strip()
-    # Filter out whitespace-only or very short extractions (likely artefacts)
     return len(text) >= MIN_TEXT_CHARS
 
 
@@ -33,9 +62,18 @@ def _extract_text_from_page(page: fitz.Page) -> str:
     return page.get_text("text")
 
 
-def _ocr_page_image(pil_image: Image.Image) -> str:
+def _render_page_to_pil(page: fitz.Page, dpi: int = 300) -> Image.Image:
+    """Render a PDF page to a PIL Image using PyMuPDF (no Poppler needed)."""
+    zoom = dpi / 72.0
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat)
+    img_data = pix.tobytes("png")
+    return Image.open(io.BytesIO(img_data))
+
+
+def _ocr_page_image(pil_image: Image.Image, lang: str = "eng") -> str:
     """Run Tesseract OCR on a PIL image and return the extracted text."""
-    return pytesseract.image_to_string(pil_image)
+    return pytesseract.image_to_string(pil_image, lang=lang)
 
 
 def _extract_images_from_page(page: fitz.Page) -> list:
@@ -55,7 +93,7 @@ def _extract_images_from_page(page: fitz.Page) -> list:
 def convert_pdf_to_docx(
     pdf_path: str,
     output_path: str | None = None,
-    progress_callback=None,
+    progress_callback: Callable | None = None,
     ocr_lang: str = "eng",
 ) -> str:
     """
@@ -95,9 +133,6 @@ def convert_pdf_to_docx(
     pdf_doc = fitz.open(pdf_path)
     total_pages = len(pdf_doc)
 
-    # Pre-render all pages for OCR fallback
-    pil_images = None  # Lazy-loaded only if needed
-
     for page_num in range(total_pages):
         page = pdf_doc[page_num]
 
@@ -105,7 +140,7 @@ def convert_pdf_to_docx(
             doc.add_page_break()
 
         if _is_text_page(page):
-            # --- Text-based page ---
+            # --- Text-based page: direct extraction ---
             text = _extract_text_from_page(page)
             _add_text_to_doc(doc, text)
 
@@ -114,17 +149,14 @@ def convert_pdf_to_docx(
             for img_bytes, ext in images:
                 _add_image_to_doc(doc, img_bytes, ext)
         else:
-            # --- Image / scanned page → OCR ---
-            if pil_images is None:
-                pil_images = convert_from_path(pdf_path, dpi=300)
-
-            if page_num < len(pil_images):
-                ocr_text = _ocr_page_image(pil_images[page_num])
-                if ocr_text.strip():
-                    _add_text_to_doc(doc, ocr_text)
-                else:
-                    # If OCR returns nothing, embed the page as an image
-                    _add_pil_image_to_doc(doc, pil_images[page_num])
+            # --- Image / scanned page: render with PyMuPDF → OCR ---
+            pil_image = _render_page_to_pil(page, dpi=300)
+            ocr_text = _ocr_page_image(pil_image, lang=ocr_lang)
+            if ocr_text.strip():
+                _add_text_to_doc(doc, ocr_text)
+            else:
+                # If OCR returns nothing, embed the page as an image
+                _add_pil_image_to_doc(doc, pil_image)
 
         if progress_callback:
             progress_callback(page_num + 1, total_pages)
