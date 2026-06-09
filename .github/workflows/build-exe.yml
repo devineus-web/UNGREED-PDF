@@ -46,7 +46,7 @@ jobs:
         run: |
           $upxDir = (Get-Command upx -ErrorAction SilentlyContinue).Source | Split-Path
           if (-not $upxDir) { $upxDir = "C:\ProgramData\chocolatey\bin" }
-          pyinstaller --onefile --windowed --clean --strip --name UNGREED-PDF --upx-dir $upxDir --version-file version_info.py --add-data "converter.py;." --add-data "tesseract_bundle/tesseract;tesseract" app.py
+          pyinstaller --onefile --windowed --clean --name UNGREED-PDF --upx-dir $upxDir --upx-exclude "python312.dll" --upx-exclude "pydll" --upx-exclude "vcruntime140.dll" --upx-exclude "vcruntime140_1.dll" --upx-exclude "ucrtbase.dll" --version-file version_info.py --add-data "converter.py;." --add-data "tesseract_bundle/tesseract;tesseract" app.py
 
       - name: Check EXE size
         shell: pwsh
